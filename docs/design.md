@@ -4,6 +4,23 @@ Living document. Captures design decisions made during development so they don't
 
 ---
 
+## Grounding philosophy (applies to all sensors)
+
+**Star ground at the harness, unified ground plane on the PCB.**
+
+Each sensor on the harness gets a dedicated signal-ground terminal pin (e.g., `FUEL_GND`, `OIL_GND`, `COOLANT_GND`, etc.). The customer runs a small-gauge wire from that terminal alongside the sensor signal wire all the way to the sender's body or its dedicated ground stud. Inside the dashboard, every sensor's ground terminal ties to the same **single signal-ground plane** on the PCB — that's the "star point."
+
+Why this matters:
+- A dedicated ground per sensor means voltage drop on one ground wire (loose connection, corrosion, long run) affects only that sensor — no cross-coupling between fuel, oil, coolant readings.
+- High-current paths (alternator, lights, fans) don't flow through any sensor ground wire, so they can't induce voltage noise into ADC readings.
+- The PCB signal ground bonds to chassis/battery ground at exactly **one** carefully chosen point — typically right at the dashboard's power input terminal block. No ground loops between the dashboard and the rest of the car's electrical system.
+
+Install instruction (manual): customers should bond the dashboard's main GND terminal to the **engine block ground stud** (where the battery negative cable terminates), not random sheet metal. This puts the dashboard at the same potential as the alternator and battery, which is the cleanest reference in the car.
+
+The 12V switched excitation rail for resistive senders (fuel, oil pressure, coolant temp) can be shared across sensors — one fused 12V_SW rail on the PCB, individually pulled-up to each sensor's signal pin via that sensor's own R_known resistor. Each input also gets its own TVS/Schottky clamp and analog low-pass filter so a fault on one sensor wire can't affect any other.
+
+---
+
 ## Vehicle Speed (VSS)
 
 ### Design goal
