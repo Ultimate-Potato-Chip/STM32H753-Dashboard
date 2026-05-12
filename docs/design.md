@@ -55,7 +55,17 @@ A single labeled "VSS" terminal on the customer's wiring harness that accepts *w
 
 ### Hardware path (input)
 
-VSS terminal → **MAX9924 signal conditioner** (or equivalent: MAX9925/26/27, NCV1124) → MCU input capture pin (currently `PE9` on `TIM1_CH1`).
+Three VSS terminals on the harness, covering both Hall and VR sensors:
+
+| Terminal | Hall sensor use | VR sensor use |
+|---|---|---|
+| `VSS_HI` | Signal output from sensor | One wire of the sensor |
+| `VSS_LO` | Sensor ground | Other wire of the sensor (typically grounded at sensor end too) |
+| `VSS_PWR` | +12V to sensor power pin | Not used |
+
+Terminals feed a **MAX9924 signal conditioner** (or equivalent: MAX9925/26/27, NCV1124) configured for single-ended operation, → MCU input capture pin (`PA0` on `TIM2_CH1`).
+
+**Why single-ended instead of differential for VR sensors:** Fully-differential VR wiring is electrically superior (better common-mode noise rejection), but the industry-standard approach used by Holley, AEM, and similar aftermarket products is single-ended with one VR wire to ground. This is what customers are familiar with from existing installs. Simpler wiring instructions, one less wire to run, no measurable loss of reliability in practice. MAX9924 supports both modes — we just configure for single-ended.
 
 The MAX9924 is purpose-built to accept both VR (variable reluctance, AC sine wave) and Hall-effect (DC square wave) inputs in the same chip and produce a clean 3.3V digital output for the MCU. This means:
 
@@ -111,9 +121,25 @@ Both VSS-pulse modes reduce to the same final formula — they just differ in wh
 
 ### Implementation notes
 
-- TIM1 CH1 (PE9) is configured for input capture in CubeMX. The HAL `HAL_TIM_IC_CaptureCallback` fires on each rising edge — measure time delta between captures → period → frequency.
-- TIM1 is 16-bit (Period = 65535) with no prescaler. At HSI 64MHz that wraps every ~1ms, which is plenty fast for the highest expected VSS frequencies (~1kHz at 80mph with 8000 PPM ÷ 60 mph→min conversion). Implement overflow handling so very low speeds (long pulse periods) still work.
-- Filter the per-pulse speed reading with a short moving average (~5–10 samples) before driving the speedo display, otherwise the needle will jitter on each pulse.
+- TIM2 CH1 (PA0) is configured for input capture in CubeMX. The HAL `HAL_TIM_IC_CaptureCallback` fires on each rising edge — measure time delta between captures → period → frequency.
+- TIM2 is 32-bit running at 64MHz tick rate (HSI direct, APB1 timer clock). 32-bit counter at 64MHz wraps every ~67 seconds, far longer than any realistic VSS pulse interval, so no overflow handling is needed.
+- Speed averaging: implementation uses simple moving average over the last N pulse periods, with N exposed as user calibration parameter `pulsesToAverage`. Holley convention is "at least 1/4 of your tooth count" (e.g., 5+ pulses for a T56's 17 PPR), more for smoother needle.
+- Pulse timeout: if no edge for >2 seconds, force speed to 0. Prevents stale readings when the vehicle stops.
+
+### Reference example: T56 with 3.42 rear gear, 275/60R15 tires
+
+- **Direct speedo input mode (dashboard reads sensor directly):**
+  - VSS Teeth: 17 (T56 transmission output shaft pickup)
+  - Gear: 3.42 (rear axle ratio, no transformation)
+  - Tire Diameter: 27.99" (calculated from 275/60R15)
+  - Pulses to average: 5 or more (1/4 of 17)
+  - Effective `pulsesPerMile = (63360 / (tire × π)) × gear × ppr = (63360 / 87.94) × 3.42 × 17 ≈ 41,879`
+
+- **Trans ECU output mode (dashboard transforms pulses for a Holley ICF or similar that expects 40 PPR):**
+  - Output a pulse train representing 40 PPR instead of the input's 17 PPR
+  - This is the future VSS-output feature (PWM timer driving an output pin)
+  - The dashboard's display reading uses the original 17 PPR for accuracy
+  - The output frequency is calculated from the dashboard's known MPH
 
 ---
 
