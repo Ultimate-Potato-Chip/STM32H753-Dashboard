@@ -33,10 +33,14 @@ static const CalibrationData defaults = {
 
     .tachPulsesPerRev        = 1,
 
-    /* CAN preferred for everything by default — customers with a Sniper 2
-     * get full functionality automatically, customers without CAN fall back
-     * to local sensors transparently. App can override per-gauge. */
-    .speedSource             = SRC_CAN_PRIMARY,
+    /* Defaults:
+     *   Speed: LOCAL_PRIMARY — direct pulse capture updates faster than CAN
+     *          broadcast rate at highway speeds, and is the "natural" reading
+     *          when a physical VSS is wired. Falls back to CAN if no pulses.
+     *   Others: CAN_PRIMARY — Sniper-style ECUs publish these at adequate
+     *          rates with built-in smoothing, and the CAN value is generally
+     *          more authoritative for engine vitals. */
+    .speedSource             = SRC_LOCAL_PRIMARY,
     .tachSource              = SRC_CAN_PRIMARY,
     .coolantTempSource       = SRC_CAN_PRIMARY,
     .batteryVoltageSource    = SRC_CAN_PRIMARY,
