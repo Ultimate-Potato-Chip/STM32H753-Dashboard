@@ -366,6 +366,61 @@ For customers who don't want any sensor in the drivetrain — particularly usefu
 
 Reasonable v2/v3 feature. Probably most appealing as a **fallback** rather than primary — pulse VSS for fast updates while moving, GPS for "absolute truth" sanity check or for customers physically unable to install a pulse sensor.
 
+### Odometer storage
+
+A real product needs to track mileage, persisted across power cycles. Not yet implemented — sketched here for when we are.
+
+**Legal framing (for the classic-car aftermarket market we target):**
+
+The Federal Odometer Act regulates fraud in vehicle sales, not gauge cluster hardware. NHTSA exempts 10+ year old vehicles from many odometer-disclosure requirements. Modern aftermarket clusters (Holley, Dakota Digital, AEM) don't have certified tamper-resistant odometer hardware — they use software safeguards:
+
+1. Customer sets starting mileage once during install (Bluetooth app, confirmation dialog)
+2. Day-to-day, only increments based on accumulated VSS pulses
+3. Changes to the recorded mileage require explicit app action + confirmation, with a log entry
+4. Customer-facing log: "Mileage updated from X to Y on YYYY-MM-DD"
+
+That's "tamper-evident, not tamper-proof," and it's the industry-standard practice. We don't need sealed hardware for the market we serve.
+
+**Technical concern: EEPROM wear, not law.**
+
+Naive implementation (save every 0.1 mile) hits 1M write cycles in ~5 years of daily driving, which is the rated lifetime of a 24LC256. Three viable approaches:
+
+1. **Wear-leveled rotating slots.** Reserve 10–20 EEPROM slots, rotate writes through them, each slot tagged with a monotonically-increasing sequence number. On boot, scan all slots, adopt the highest-sequence valid one. 10–20× effective lifetime. No hardware change needed.
+2. **FRAM chip for the odometer.** Drop-in replacement for the 24LC256 footprint with a part like **FM25V20A** (Cypress/Infineon) — same SOIC-8 package, $3–5, rated **10^14 write cycles** (effectively unlimited). Probably the cleanest answer for a product. The EEPROM still handles calibration; FRAM handles only the odometer.
+3. **Power-loss-detect save.** Monitor the +12V_SW input; on a falling edge, dump odometer to EEPROM using bulk capacitance (~470 µF) to bridge the few ms needed. Lower cost than FRAM but more complex firmware and a hardware monitor circuit.
+
+Recommended path: **option 2 (FRAM)** — small BOM cost, no firmware complexity, near-infinite lifetime. Worth the few dollars for a product whose key differentiator is "your odometer works correctly forever."
+
+**Implementation sketch:**
+
+```
+typedef struct {
+    uint32_t sequence;        // monotonic, written-time
+    uint32_t tenthsOfMile;    // odometer × 10 (so we store 0.1-mile resolution)
+    uint16_t crc16;
+} OdometerRecord;
+```
+
+VSS pulse capture accumulates tenths-of-mile in RAM; main loop calls `Odometer_Save()` periodically (say every 0.1 mile of accumulated distance). With wear leveling: bump sequence, pick next slot, write. On boot: scan slots, pick highest sequence with valid CRC.
+
+### MIL / Check Engine Light (CAN-driven)
+
+Many ECUs broadcast their MIL status over CAN. For Holley Sniper 2 — need to confirm the CAN ID from the .dbc (might be packed into an engine status message rather than its own ID). For OEM ECUs (LT1/Coyote/etc.), it's part of their proprietary status broadcasts.
+
+Implementation pattern:
+- Add `mil` flag to `GaugeData` (or wherever)
+- Add CAN ID + dispatch case to `oem_can/` modules
+- Add `Source_MilActive()` accessor returning the current MIL state
+- Display layer renders a "check engine" icon when active
+
+This is a straightforward extension of the existing CAN pattern — nothing structurally new to design.
+
+### Parking brake indicator
+
+Discrete GPIO input from the parking brake switch (typically pulls to ground when engaged — same wire that lights the factory "BRAKE" indicator). Add a `BRAKE_IN` terminal to the harness, one more GPIO pin, one more `inputs.parkingBrake` flag. Display renders the brake icon when engaged.
+
+Also worth considering: **brake fluid level switch** (some master cylinders have this), **proportioning valve pressure differential switch** (in older brake systems with combination valves). Both wire identically. Could unify under a single "BRAKE_WARN" input that lights the brake icon for any of those conditions, matching factory behavior.
+
 ### Voltage transducers for oil pressure (v2 hardware)
 
 0.5–4.5V transducers (Bosch, Honeywell, AutoMeter premium) need a different input topology than the resistive/switch case (no pull-up, just a 2:3 divider to scale 5V → 3.3V). Add a separate `OIL_TRANS` input pin on the harness in the next PCB revision. Same `OilSenderType` enum gets a new value `OIL_SENDER_TRANSDUCER`.
