@@ -100,19 +100,31 @@ Single labeled "FUEL" input on the harness. Accept any resistive fuel level send
 
 ### Hardware path
 
-Fuel sender (variable resistor to chassis ground) → voltage divider with known pull-up resistor → ADC pin (currently `PC5` on `ADC1`).
+12V excitation (switched ignition, not constant battery — avoids parasitic drain through sender when key is off) → known pull-up resistor → ADC pin (currently `PC5` on `ADC1`) → fuel sender (variable resistor to dashboard signal ground).
 
 ```
-3.3V ── R_known ──┬── ADC pin (PC5)
-                  │
-              R_sender (fuel sender)
-                  │
-                 GND
+12V_SW ── R_known (1kΩ) ──┬──── ADC pin (PC5)
+                          │
+                          ├──[ TVS/Schottky clamp to 3.3V ]── overvoltage protection
+                          │
+                          ├──[ 100nF to signal GND ]── slosh filter
+                          │
+                          ╰── R_sender (fuel sender)
+                              │
+                            Signal GND ── dedicated ground wire back to dashboard
 ```
 
-`R_known` selection is a tradeoff: needs to be sized for the highest-resistance sender we want to support (so the divider doesn't pin at one end). For supporting both ~10Ω full-scale (Ford/Mopar) and ~250Ω full-scale (GM modern, aftermarket), `R_known ≈ 100Ω` gives reasonable ADC resolution across the full range. Note: at 250Ω/100Ω divider with 3.3V supply, the sender draws ~10mA — well within sender ratings.
+**Why 12V excitation:** classic cars are notorious for chassis-ground offset issues. A 200–500mV difference between chassis ground and dashboard signal ground is common, especially with corroded grounds, rusty body mounts, or one-wire alternator setups. With 3.3V excitation, that's a 6–15% measurement error in your fuel gauge. With 12V excitation, the same ground offset is only a 2–4% error. Higher excitation current (10mA vs 2mA) also cuts through wiper contact noise on aging senders.
 
-Additional input protection: small RC filter at the ADC pin (~100nF to ground + series resistor) to suppress sloshing transients before they hit the ADC.
+**Critical wiring requirement:** sender ground must be a **dedicated wire back to the dashboard**, not relying on the sender body's chassis ground. This eliminates the chassis-ground-offset problem entirely. Document this in customer wiring instructions — it's the single biggest source of erratic fuel-gauge complaints with aftermarket clusters.
+
+**Component sizing:**
+- `R_known = 1kΩ` — sized so the ADC pin never exceeds ~2.4V even at the highest expected sender resistance (250Ω GM modern): `12V × 250/1250 = 2.4V`. Plenty of headroom under the 3.3V max.
+- TVS or Schottky clamp diode from ADC pin to 3.3V — protects the MCU input in case of sender wire open-circuit (which would otherwise pull the ADC pin to 12V via the pull-up).
+- 100nF cap to ground — first-stage analog low-pass filter to suppress sloshing transients before they reach the ADC. Time constant with the divider Thevenin impedance (~700Ω) is ~70µs — fast enough not to bias the reading but kills sharp transients.
+- Software-side digital filter handles longer-term smoothing (see below).
+
+**Current draw at the sender:** worst case 12V / (1kΩ + 10Ω) ≈ 12mA. Power dissipated in a low-resistance sender (10Ω full): 1.4mW — well within any fuel sender's rating. No sender damage concern.
 
 ### Software path
 
