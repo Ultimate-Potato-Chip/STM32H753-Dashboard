@@ -109,21 +109,26 @@ Single labeled "FUEL" input on the harness. Accept any resistive fuel level send
                           │
                           ├──[ 100nF to signal GND ]── slosh filter
                           │
-                          ╰── R_sender (one-wire fuel sender)
-                              │
-                            Sender body / tank → chassis ground
-                            (Optional: FUEL_GND terminal on harness can be wired
-                            to sender body for customers who want lower offset error)
+                          ╰── FUEL_SIG terminal ── R_sender ── return path:
+                                                               (a) FUEL_GND terminal  ← recommended
+                                                                   (tied to dashboard signal GND plane)
+                                                               (b) chassis ground via sender body
+                                                                   (works, not recommended)
 ```
 
 **Why 12V excitation:** classic cars are notorious for chassis-ground offset issues. A 200–500mV difference between chassis ground and dashboard signal ground is common, especially with corroded grounds, rusty body mounts, or one-wire alternator setups. With 3.3V excitation, that's a 6–15% measurement error in your fuel gauge. With 12V excitation, the same ground offset is only a 2–4% error. Higher excitation current (10mA vs 2mA) also cuts through wiper contact noise on aging senders.
 
-**One-wire vs. two-wire senders:** the overwhelming majority of factory classic-car senders are one-wire — sender body threads into the tank, returns to chassis via the tank-to-body bond. Two-wire senders are uncommon in this market. The product must support one-wire by default.
+**Two-wire (recommended) vs. one-wire (supported but unwarranted):**
 
-How we handle this:
-- The two-point custom calibration *implicitly captures* the ground offset present at calibration time, so a stable offset is largely absorbed into the saved endpoints. Residual error is only the *variance* of the offset (alternator load, accessory cycling) — typically ±2–5% for fuel gauging, which is acceptable for the use case.
-- Calibration instruction in the user manual: **"Calibrate with the engine running and typical accessories on (lights, radio, etc.), not just key-on."** This captures the most realistic ground offset.
-- The harness includes an **optional FUEL_GND terminal** for the rare customer who experiences offset drift in practice. They can run a small-gauge wire from this terminal to the sender body / tank flange / a clean tank-mounted ground stud. Most customers won't use it.
+The harness includes a dedicated **FUEL_GND terminal** that ties directly to the dashboard's signal ground plane. This is the **recommended** way to wire any fuel sender:
+
+- **Two-wire senders** (some aftermarket, some marine, rare factory): one wire to the FUEL signal terminal, the other to FUEL_GND. This is the clean, accurate, low-noise configuration we engineer toward.
+- **One-wire senders with a retrofitted ground wire** (recommended for classic-car installs): customer runs a small-gauge wire from the FUEL_GND terminal to the sender body, mounting flange, or a clean tank-mounted ground stud. This converts a factory one-wire sender into a clean two-wire installation. Five minutes of work, eliminates ground-offset error.
+- **One-wire senders relying on chassis ground** (technically supported, not recommended): the FUEL_GND terminal is left disconnected and the sender body returns to chassis via the tank's mechanical mounting. This will work — the two-point custom calibration absorbs most of the static ground offset — but accuracy and stability cannot be guaranteed. Documented in the install manual:
+
+> **Disclaimer (install manual):** While one-wire senders relying on chassis ground are technically supported, the accuracy and reliability of the reading cannot be guaranteed without a dedicated ground wire. For best results, run a small-gauge wire from the FUEL_GND terminal to the sender body or tank mounting flange.
+
+This framing protects the product's accuracy reputation (warranty calls about jumpy fuel gauges become "did you connect FUEL_GND?") while still letting customers do a clean factory-look install if they really insist.
 
 **Component sizing:**
 - `R_known = 1kΩ` — sized so the ADC pin never exceeds ~2.4V even at the highest expected sender resistance (250Ω GM modern): `12V × 250/1250 = 2.4V`. Plenty of headroom under the 3.3V max.
