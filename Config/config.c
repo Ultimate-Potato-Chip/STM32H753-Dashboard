@@ -5,6 +5,7 @@ extern UART_HandleTypeDef huart1;
 
 static const CalibrationData defaults = {
     .vssPulsesPerMile        = 8000,
+    .vssPulsesToAverage      = 5,        /* ~1/4 of a 17-tooth T56 — Holley convention */
 
     /* Oil pressure: GM 0-90Ω resistive sender, 100 PSI range */
     .oilSenderType           = OIL_SENDER_RESISTIVE,

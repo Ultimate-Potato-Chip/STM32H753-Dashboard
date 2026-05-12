@@ -49,7 +49,10 @@ typedef struct {
 /* Calibration values persisted in I2C EEPROM and adjusted via Bluetooth */
 typedef struct {
     /* VSS */
-    uint32_t vssPulsesPerMile;      /* T56 default ~8000; calibrate per vehicle */
+    uint32_t vssPulsesPerMile;      /* T56 default ~8000; calibrate per vehicle      */
+    uint8_t  vssPulsesToAverage;    /* SMA window size — Holley convention is        */
+                                    /* "at least 1/4 of your tooth count" (default 5,*/
+                                    /* good for 17-tooth T56). Capped at 16 in code. */
 
     /* Oil pressure */
     OilSenderType oilSenderType;    /* default OIL_SENDER_RESISTIVE */

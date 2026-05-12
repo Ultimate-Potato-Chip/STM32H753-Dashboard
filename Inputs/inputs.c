@@ -14,20 +14,32 @@ InputData inputs = {0};
  * any realistic VSS pulse interval. We can use the raw capture delta as
  * the pulse period without overflow handling.
  *
+ * Smoothing: simple moving average over the last N periods, where N is
+ * calibration.vssPulsesToAverage (user-tunable via app, capped at
+ * VSS_MAX_AVG in code). Holley convention is "at least 1/4 of your tooth
+ * count" — 5 is a reasonable default for a 17-tooth T56.
+ *
  * Pulse → MPH:
- *   freq_Hz = VSS_TIM_CLK_HZ / period_ticks
- *   mph     = freq_Hz × 3600 / pulses_per_mile
- *           = (VSS_TIM_CLK_HZ × 3600) / (period_ticks × pulses_per_mile)
+ *   avg_period = mean of last N captured periods
+ *   freq_Hz    = VSS_TIM_CLK_HZ / avg_period
+ *   mph        = freq_Hz × 3600 / pulses_per_mile
+ *              = (VSS_TIM_CLK_HZ × 3600) / (avg_period × pulses_per_mile)
  * -------------------------------------------------------------------------*/
 #define VSS_TIM_CLK_HZ          64000000U
-#define VSS_TIMEOUT_MS          2000U       /* no pulse for 2s → 0 mph */
-#define VSS_MIN_PERIOD_TICKS    100U        /* < 100 ticks (~1.5 µs) is noise */
-#define VSS_EMA_ALPHA           0.2f
+#define VSS_TIMEOUT_MS          2000U       /* no pulse for 2s → 0 mph         */
+#define VSS_MIN_PERIOD_TICKS    100U        /* < 100 ticks (~1.5 µs) is noise  */
+#define VSS_MAX_AVG             16          /* hard cap on smoothing window    */
 
 static volatile uint32_t vssLastCaptureTick = 0;
-static volatile uint32_t vssLastPeriodTicks = 0;
 static volatile uint32_t vssLastPulseMs     = 0;
 static volatile uint8_t  vssHaveFirstCap    = 0;
+
+/* Circular buffer of recent period samples (in timer ticks).
+ * Writer: HAL_TIM_IC_CaptureCallback (ISR). Readers: Inputs_Update.
+ * 32-bit writes are atomic on Cortex-M7; index/count fit in a byte. */
+static volatile uint32_t vssPeriodBuf[VSS_MAX_AVG] = {0};
+static volatile uint8_t  vssBufIdx   = 0;   /* next write position */
+static volatile uint8_t  vssBufCount = 0;   /* valid entries, capped at VSS_MAX_AVG */
 
 /* -------------------------------------------------------------------------
  * Tachometer — TIM1 CH1 input capture on PE9
@@ -78,23 +90,41 @@ void Inputs_Update(void)
 {
     uint32_t now = HAL_GetTick();
 
-    /* --- VSS: latest captured period → MPH ---------------------------- */
+    /* --- VSS: average of last N pulse periods → MPH ------------------- */
     {
-        uint32_t periodTicks;
+        /* Clamp the configured window to what we actually have stored. */
+        uint8_t N = calibration.vssPulsesToAverage;
+        if (N > VSS_MAX_AVG) N = VSS_MAX_AVG;
+
+        /* Atomic snapshot of the buffer state. The buffer entries themselves
+         * are 32-bit (atomic on Cortex-M7), so we only need the lock long
+         * enough to grab idx/count/timestamp consistently. */
+        uint8_t  bufIdx, bufCount;
         uint32_t lastPulseMs;
         __disable_irq();
-        periodTicks = vssLastPeriodTicks;
+        bufIdx      = vssBufIdx;
+        bufCount    = vssBufCount;
         lastPulseMs = vssLastPulseMs;
         __enable_irq();
 
+        if (N > bufCount) N = bufCount;
         uint32_t ppm = calibration.vssPulsesPerMile;
-        if (periodTicks == 0 || ppm == 0 || (now - lastPulseMs) > VSS_TIMEOUT_MS) {
+
+        if (N == 0 || ppm == 0 || (now - lastPulseMs) > VSS_TIMEOUT_MS) {
             inputs.speedMph = 0.0f;
         } else {
-            float instantMph = ((float)VSS_TIM_CLK_HZ * 3600.0f) /
-                               ((float)periodTicks * (float)ppm);
-            inputs.speedMph = VSS_EMA_ALPHA * instantMph +
-                              (1.0f - VSS_EMA_ALPHA) * inputs.speedMph;
+            /* Sum the most recent N entries, walking backwards from the
+             * next-write slot. Each buffer slot is a single uint32 written
+             * atomically by the ISR, so no further locking needed. */
+            uint64_t sum = 0;
+            uint8_t  idx = (uint8_t)((bufIdx + VSS_MAX_AVG - 1) % VSS_MAX_AVG);
+            for (uint8_t i = 0; i < N; i++) {
+                sum += vssPeriodBuf[idx];
+                idx = (uint8_t)((idx + VSS_MAX_AVG - 1) % VSS_MAX_AVG);
+            }
+            uint32_t avgPeriod = (uint32_t)(sum / N);
+            inputs.speedMph = ((float)VSS_TIM_CLK_HZ * 3600.0f) /
+                              ((float)avgPeriod * (float)ppm);
         }
     }
 
@@ -132,10 +162,14 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
     if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
         uint32_t now = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
         if (vssHaveFirstCap) {
-            uint32_t period = now - vssLastCaptureTick;
+            uint32_t period = now - vssLastCaptureTick;  /* 32-bit wraparound natural */
             if (period >= VSS_MIN_PERIOD_TICKS) {
-                vssLastPeriodTicks = period;
-                vssLastPulseMs     = HAL_GetTick();
+                /* Push into ring buffer. Reader (Inputs_Update) handles the
+                 * "how many entries to actually consume" decision. */
+                vssPeriodBuf[vssBufIdx] = period;
+                vssBufIdx = (uint8_t)((vssBufIdx + 1) % VSS_MAX_AVG);
+                if (vssBufCount < VSS_MAX_AVG) vssBufCount++;
+                vssLastPulseMs = HAL_GetTick();
             }
         } else {
             vssHaveFirstCap = 1;
