@@ -1,0 +1,34 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+#include "main.h"
+#include <stdint.h>
+
+/* Calibration values persisted in I2C EEPROM and adjusted via Bluetooth */
+typedef struct {
+    /* VSS */
+    uint32_t vssPulsesPerMile;      /* T56 default ~8000; calibrate per vehicle */
+
+    /* Oil pressure sender (0.5V–4.5V linear) */
+    float    oilSenderMinV;         /* V at 0 PSI   (default 0.5) */
+    float    oilSenderMaxV;         /* V at max PSI (default 4.5) */
+    float    oilSenderMaxPSI;       /* sender range (default 100) */
+
+    /* Fuel sender (resistive) */
+    uint16_t fuelSenderEmptyOhm;    /* resistance at empty (default 10) */
+    uint16_t fuelSenderFullOhm;     /* resistance at full  (default 73) */
+    uint16_t fuelDividerOhm;        /* known resistor in voltage divider (default 330) */
+
+    /* Coolant sender calibration — curve TBD */
+
+    /* Tachometer */
+    uint8_t  tachPulsesPerRev;      /* pulses per crankshaft revolution from signal source */
+} CalibrationData;
+
+extern CalibrationData calibration;
+
+void Config_Init(void);     /* load from EEPROM; apply defaults if blank */
+void Config_Save(void);     /* write calibration to EEPROM */
+void Config_BtUpdate(void); /* poll USART1 for Bluetooth config commands */
+
+#endif /* CONFIG_H */

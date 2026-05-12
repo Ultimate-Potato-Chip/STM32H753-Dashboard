@@ -1,0 +1,46 @@
+# Build output
+build/
+Debug/
+Release/
+*.o
+*.obj
+*.d
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+*.su
+
+# CubeMX scratch / generated metadata
+mx.scratch
+*.bak
+*.backup
+
+# CubeIDE / Eclipse local state
+.metadata/
+RemoteSystemsTempFiles/
+.recommenders/
+
+# VS Code workspace state (keep settings.json, launch.json, c_cpp_properties.json — share editor config)
+.vscode/*.log
+.vscode/ipch/
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor swap files
+*.swp
+*.swo
+*~
+
+# Local secrets / credentials (none expected, but safety net)
+*.pem
+*.key
+.env
+.env.local
+
+# Cube programmer logs
+*.stldr.log
