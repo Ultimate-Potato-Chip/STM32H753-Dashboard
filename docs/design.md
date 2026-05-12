@@ -316,6 +316,43 @@ This is exactly how aftermarket gauge manufacturers (Auto Meter, VDO) characteri
 
 ---
 
+## Future / Roadmap
+
+Captured here so it doesn't get lost in chat history. Not committed to a release.
+
+### Community-customizable gauge faces
+
+Idea: let owners design their own gauge faces and share them. Holley/AEM ship a fixed set of themes; nobody does open community sharing yet. Could be a real product differentiator.
+
+Implementation tiers, easy → hard:
+
+1. **Theme selection** — multiple built-in gauge faces compiled into firmware, user picks one in the app. Lowest engineering cost. Doesn't need community infrastructure but doesn't have "make it yours" appeal either.
+2. **Configurable display assignment** — user picks which gauge appears on which of the 4 round displays (e.g., "swap oil pressure and fuel"). Pure config, no asset work.
+3. **Custom asset upload** — user uploads gauge face bitmap, needle bitmap, colors, redline marks via the app. Stored in external flash or SD card. Needs an asset bundle format and reasonable rendering performance.
+4. **Fully scripted gauges** — small DSL or scripting engine letting users define gauge logic, animations, custom data combinations. Significant engineering effort.
+
+Realistic v2 target: tiers 1 + 2 (themes + display assignment). Tier 3 if external storage is added. Tier 4 is probably never worth the complexity vs. just shipping more built-in themes.
+
+**Storage math:** STM32H753 has 2MB internal flash, ~37KB used today. A single uncompressed RGB565 720×720 gauge face = 1 MB. So 1–2 high-res themes fit internally without external storage, more with compression (PNG, RLE, or palette mode for simple graphics).
+
+**Community infrastructure:** if we ever want a "theme marketplace" experience, the easiest path is a GitHub-style repo where users submit themes via PR + a curated index file the Bluetooth app pulls from. No backend infrastructure required initially.
+
+### Additional CAN sources for oil pressure (and others)
+
+Holley Sniper 2 doesn't broadcast oil pressure on its CAN — but GM and Ford factory ECUs do, on their proprietary CAN messages. When we want to support OEM CAN integration (LT1 swaps, Coyote swaps, Vortec swaps that retain the original ECU), add the appropriate CAN IDs:
+
+- **GM Gen V LT1/LT4 (E92 ECM):** oil pressure on proprietary CAN — research the specific message ID per platform.
+- **Ford Coyote 5.0L (Control Pack):** oil pressure broadcast on the Ford CAN — research the ID.
+- **Standard OBD-II:** oil pressure is *not* a standard PID (only oil temp, PID 0x5C, is). Don't rely on it.
+
+Each one needs a new `CAN_ID_*` constant in `holley_can.h` (rename the file when we add multi-OEM support — `oem_can.c`?) and a case in the dispatch switch. The `Source_*()` accessor architecture handles the rest automatically.
+
+### Voltage transducers for oil pressure (v2 hardware)
+
+0.5–4.5V transducers (Bosch, Honeywell, AutoMeter premium) need a different input topology than the resistive/switch case (no pull-up, just a 2:3 divider to scale 5V → 3.3V). Add a separate `OIL_TRANS` input pin on the harness in the next PCB revision. Same `OilSenderType` enum gets a new value `OIL_SENDER_TRANSDUCER`.
+
+---
+
 ## Battery Voltage / Dimmer
 
 Both read via a resistor divider (100k / 33k for a ~4:1 ratio, scales 0–15V battery rail down to 0–3.3V ADC range). Same divider topology for both; just different ADC channels.
