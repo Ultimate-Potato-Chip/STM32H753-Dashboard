@@ -49,6 +49,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     CAN/holley_can.c
     Sensors/sensors.c
     Inputs/inputs.c
+    Sources/sources.c
     Config/config.c
 )
 
@@ -58,6 +59,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     CAN
     Sensors
     Inputs
+    Sources
     Config
 )
 

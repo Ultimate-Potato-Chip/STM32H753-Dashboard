@@ -4,6 +4,21 @@
 #include "main.h"
 #include <stdint.h>
 
+/* Where each gauge value should come from. Set per-value so the customer
+ * can mix-and-match: e.g., speed from CAN (Sniper 2), tach from a coil-neg
+ * pulse, coolant temp from CAN, battery voltage from local ADC.
+ *
+ * CAN_PRIMARY automatically falls back to the local source when CAN data is
+ * stale (>250ms old). The *_ONLY modes never fall back — useful when the
+ * customer knows one source is wrong and wants to force the other.
+ *
+ * Future Bluetooth app exposes these as dropdowns per-gauge. */
+typedef enum {
+    SRC_CAN_PRIMARY = 0,    /* use CAN if fresh, else local sensor   (default) */
+    SRC_LOCAL_ONLY  = 1,    /* always use local sensor; ignore CAN              */
+    SRC_CAN_ONLY    = 2,    /* always use CAN; return 0 if stale                */
+} ValueSource;
+
 /* Calibration values persisted in I2C EEPROM and adjusted via Bluetooth */
 typedef struct {
     /* VSS */
@@ -23,6 +38,12 @@ typedef struct {
 
     /* Tachometer */
     uint8_t  tachPulsesPerRev;      /* pulses per crankshaft revolution from signal source */
+
+    /* Per-gauge source selectors. Bluetooth app controls these at runtime. */
+    ValueSource speedSource;
+    ValueSource tachSource;
+    ValueSource coolantTempSource;
+    ValueSource batteryVoltageSource;
 } CalibrationData;
 
 extern CalibrationData calibration;

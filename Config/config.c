@@ -4,14 +4,22 @@ extern I2C_HandleTypeDef  hi2c1;
 extern UART_HandleTypeDef huart1;
 
 static const CalibrationData defaults = {
-    .vssPulsesPerMile   = 8000,
-    .oilSenderMinV      = 0.5f,
-    .oilSenderMaxV      = 4.5f,
-    .oilSenderMaxPSI    = 100.0f,
-    .fuelSenderEmptyOhm = 10,
-    .fuelSenderFullOhm  = 73,
-    .fuelDividerOhm     = 330,
-    .tachPulsesPerRev   = 1,
+    .vssPulsesPerMile     = 8000,
+    .oilSenderMinV        = 0.5f,
+    .oilSenderMaxV        = 4.5f,
+    .oilSenderMaxPSI      = 100.0f,
+    .fuelSenderEmptyOhm   = 10,
+    .fuelSenderFullOhm    = 73,
+    .fuelDividerOhm       = 330,
+    .tachPulsesPerRev     = 1,
+
+    /* CAN preferred for everything by default — customers with a Sniper 2
+     * get full functionality automatically, customers without CAN fall back
+     * to local sensors transparently. App can override per-gauge. */
+    .speedSource          = SRC_CAN_PRIMARY,
+    .tachSource           = SRC_CAN_PRIMARY,
+    .coolantTempSource    = SRC_CAN_PRIMARY,
+    .batteryVoltageSource = SRC_CAN_PRIMARY,
 };
 
 CalibrationData calibration;
