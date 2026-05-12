@@ -100,7 +100,7 @@ Single labeled "FUEL" input on the harness. Accept any resistive fuel level send
 
 ### Hardware path
 
-12V excitation (switched ignition, not constant battery — avoids parasitic drain through sender when key is off) → known pull-up resistor → ADC pin (currently `PC5` on `ADC1`) → fuel sender (variable resistor to dashboard signal ground).
+12V excitation (switched ignition, not constant battery — avoids parasitic drain through sender when key is off) → known pull-up resistor → ADC pin (currently `PC5` on `ADC1`) → fuel sender (variable resistor to chassis ground via tank).
 
 ```
 12V_SW ── R_known (1kΩ) ──┬──── ADC pin (PC5)
@@ -109,14 +109,21 @@ Single labeled "FUEL" input on the harness. Accept any resistive fuel level send
                           │
                           ├──[ 100nF to signal GND ]── slosh filter
                           │
-                          ╰── R_sender (fuel sender)
+                          ╰── R_sender (one-wire fuel sender)
                               │
-                            Signal GND ── dedicated ground wire back to dashboard
+                            Sender body / tank → chassis ground
+                            (Optional: FUEL_GND terminal on harness can be wired
+                            to sender body for customers who want lower offset error)
 ```
 
 **Why 12V excitation:** classic cars are notorious for chassis-ground offset issues. A 200–500mV difference between chassis ground and dashboard signal ground is common, especially with corroded grounds, rusty body mounts, or one-wire alternator setups. With 3.3V excitation, that's a 6–15% measurement error in your fuel gauge. With 12V excitation, the same ground offset is only a 2–4% error. Higher excitation current (10mA vs 2mA) also cuts through wiper contact noise on aging senders.
 
-**Critical wiring requirement:** sender ground must be a **dedicated wire back to the dashboard**, not relying on the sender body's chassis ground. This eliminates the chassis-ground-offset problem entirely. Document this in customer wiring instructions — it's the single biggest source of erratic fuel-gauge complaints with aftermarket clusters.
+**One-wire vs. two-wire senders:** the overwhelming majority of factory classic-car senders are one-wire — sender body threads into the tank, returns to chassis via the tank-to-body bond. Two-wire senders are uncommon in this market. The product must support one-wire by default.
+
+How we handle this:
+- The two-point custom calibration *implicitly captures* the ground offset present at calibration time, so a stable offset is largely absorbed into the saved endpoints. Residual error is only the *variance* of the offset (alternator load, accessory cycling) — typically ±2–5% for fuel gauging, which is acceptable for the use case.
+- Calibration instruction in the user manual: **"Calibrate with the engine running and typical accessories on (lights, radio, etc.), not just key-on."** This captures the most realistic ground offset.
+- The harness includes an **optional FUEL_GND terminal** for the rare customer who experiences offset drift in practice. They can run a small-gauge wire from this terminal to the sender body / tank flange / a clean tank-mounted ground stud. Most customers won't use it.
 
 **Component sizing:**
 - `R_known = 1kΩ` — sized so the ADC pin never exceeds ~2.4V even at the highest expected sender resistance (250Ω GM modern): `12V × 250/1250 = 2.4V`. Plenty of headroom under the 3.3V max.
