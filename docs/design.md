@@ -347,6 +347,25 @@ Holley Sniper 2 doesn't broadcast oil pressure on its CAN — but GM and Ford fa
 
 Each one needs a new `CAN_ID_*` constant in `holley_can.h` (rename the file when we add multi-OEM support — `oem_can.c`?) and a case in the dispatch switch. The `Source_*()` accessor architecture handles the rest automatically.
 
+### GPS-based speed input (purely electronic, no drivetrain interface)
+
+For customers who don't want any sensor in the drivetrain — particularly useful for cable-driven-transmission vehicles where the customer wants to keep the original speedometer cable intact, or for trans types without an easy electronic conversion path. Some aftermarket products (Dakota Digital DGSP, Speedhut GPS gauges) make this their main selling point.
+
+**Implementation sketch:**
+- GPS module connected over a free UART (e.g., USART3 — we already use USART1 for Bluetooth, USART2 for debug)
+- Parse NMEA `$GPRMC` sentences for speed-over-ground (knots → MPH × 1.151)
+- Populate a new field, e.g., `gpsSpeed` in a new `GpsData` struct
+- Add a `SRC_GPS_PRIMARY` value to `ValueSource` enum and a new accessor path in `Source_SpeedMph()`
+
+**Tradeoffs vs. pulse-based VSS:**
+- ✅ No drivetrain interface, no calibration math (GPS speed is ground-truth)
+- ✅ Customer just installs the GPS antenna and a power wire
+- ❌ ~1 Hz typical update rate (vs. high pulse rate from VSS at speed) — feels less "live" on a digital speedo
+- ❌ Doesn't work in garages, parking structures, tunnels — common cold-start scenario
+- ❌ Higher BOM cost for a quality automotive GPS module
+
+Reasonable v2/v3 feature. Probably most appealing as a **fallback** rather than primary — pulse VSS for fast updates while moving, GPS for "absolute truth" sanity check or for customers physically unable to install a pulse sensor.
+
 ### Voltage transducers for oil pressure (v2 hardware)
 
 0.5–4.5V transducers (Bosch, Honeywell, AutoMeter premium) need a different input topology than the resistive/switch case (no pull-up, just a 2:3 divider to scale 5V → 3.3V). Add a separate `OIL_TRANS` input pin on the harness in the next PCB revision. Same `OilSenderType` enum gets a new value `OIL_SENDER_TRANSDUCER`.
