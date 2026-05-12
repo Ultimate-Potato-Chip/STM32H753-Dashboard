@@ -55,17 +55,25 @@ A single labeled "VSS" terminal on the customer's wiring harness that accepts *w
 
 ### Hardware path (input)
 
-Three VSS terminals on the harness, covering both Hall and VR sensors:
+**One terminal on the harness, labeled `VSS`.** Customer wires whatever they have to this single pin; the dashboard takes care of conditioning whatever signal they feed it. The signal feeds a **MAX9924 signal conditioner** (or equivalent: MAX9925/26/27, NCV1124) configured for single-ended operation, → MCU input capture pin (`PA0` on `TIM2_CH1`).
 
-| Terminal | Hall sensor use | VR sensor use |
-|---|---|---|
-| `VSS_HI` | Signal output from sensor | One wire of the sensor |
-| `VSS_LO` | Sensor ground | Other wire of the sensor (typically grounded at sensor end too) |
-| `VSS_PWR` | +12V to sensor power pin | Not used |
+**Three supported customer wiring scenarios:**
 
-Terminals feed a **MAX9924 signal conditioner** (or equivalent: MAX9925/26/27, NCV1124) configured for single-ended operation, → MCU input capture pin (`PA0` on `TIM2_CH1`).
+1. **Hall-effect speed sensor (3-wire active sensor)**
+   - Sensor signal wire → dashboard `VSS` terminal
+   - Sensor +V (typ. +12V) → any switched-ignition 12V source in the vehicle (factory accessory wire, fuse box, key switch — customer's choice, not the dashboard's responsibility)
+   - Sensor GND → chassis ground at sensor body
 
-**Why single-ended instead of differential for VR sensors:** Fully-differential VR wiring is electrically superior (better common-mode noise rejection), but the industry-standard approach used by Holley, AEM, and similar aftermarket products is single-ended with one VR wire to ground. This is what customers are familiar with from existing installs. Simpler wiring instructions, one less wire to run, no measurable loss of reliability in practice. MAX9924 supports both modes — we just configure for single-ended.
+2. **ECU VSS output (Holley Sniper, Megasquirt, GM ECU pulse output, etc.)**
+   - ECU speed output wire → dashboard `VSS` terminal
+   - That's it. Single wire — the ECU provides the signal referenced to its own ground (shared with chassis).
+
+3. **Variable Reluctance sensor (2-wire passive sensor, e.g., T56 trans speedo pickup)**
+   - One sensor wire → dashboard `VSS` terminal
+   - Other sensor wire → chassis ground (typically at the sensor body or a nearby clean ground point)
+   - The MAX9924 handles the AC sine wave, adaptive threshold, and converts to digital pulses regardless of speed-varying amplitude.
+
+**Why one terminal instead of three (`VSS_HI` / `VSS_LO` / `VSS_PWR`):** Simpler install instructions, fewer wires for the customer to run, fewer pins on the harness connector, fewer support calls. The theoretical noise advantage of providing a dedicated dash-side ground reference for VR sensors is negligible in practice — the MAX9924's adaptive threshold easily handles single-ended signals over typical automotive wire runs. This matches the customer-facing simplicity of Holley/AEM products: "connect your speed wire here, done."
 
 The MAX9924 is purpose-built to accept both VR (variable reluctance, AC sine wave) and Hall-effect (DC square wave) inputs in the same chip and produce a clean 3.3V digital output for the MCU. This means:
 
