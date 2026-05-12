@@ -47,6 +47,8 @@ cmake/          Toolchain + STM32H7 cmake helpers
 
 ## NV3052C — current unresolved issue
 
+Reference materials (vendor datasheets + manufacturer's golden init sequence) are in [`_REMOVE-AFTER-NV3052C-WORKS/`](_REMOVE-AFTER-NV3052C-WORKS/) — that folder gets deleted once this issue is resolved.
+
 The NV3052CGRB center display is showing a **perfect 50/50 vertical split** when running a background-color-only test (LTDC `BCCR` cycling green→red→blue, layer disabled). One half displays the BCCR color cycling correctly (though somewhat washed-out); the other half shows a garbled "barcode" pattern.
 
 What we've tested:
