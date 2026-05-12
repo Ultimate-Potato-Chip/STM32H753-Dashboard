@@ -123,7 +123,28 @@ static const nv_reg_t nv_init[] = {
 
     /* Page 0: Display control */
     {0xFF,0x30},{0xFF,0x52},{0xFF,0x00},
-    {0x36,0x0A},  /* MADCTL — manufacturer spec (bgr=1, ss=1) */
+
+    /* MADCTL — bit assignments per NV3052CGRB datasheet 5.2.21:
+     *   D3 = bgr  (0 = RGB, 1 = BGR color filter order)
+     *   D1 = ss   (0 = source scan L→R, 1 = source scan R→L)
+     *   D0 = gs   (0 = gate scan T→B,  1 = gate scan B→T)
+     *
+     * NV3052CGRB has two physical source-driver banks (S1-S1080 and
+     * S1321-S2400) covering the 720-pixel-wide panel as left/right halves.
+     * The unresolved half-split bug shows up as one bank rendering correctly
+     * while the other shows garbled vertical-stripe ("barcode") output.
+     * The ss bit decides which bank gets the LATE pixels in each row, and
+     * the late-pixel bank is the one that ends up garbled:
+     *
+     *   0x0A (bgr=1, ss=1) — manufacturer's spec.
+     *                        Garbled side: LEFT.  Working side: RIGHT (washed colors).
+     *
+     *   0x00 (bgr=0, ss=0) — flipped scan direction.
+     *                        Garbled side: RIGHT (with a bright white line near col 360).
+     *                        Working side: LEFT.
+     *
+     * Change one byte below to switch which side is usable during testing. */
+    {0x36,0x00},  /* MADCTL — see above */
 };
 
 /* -------------------------------------------------------------------------
