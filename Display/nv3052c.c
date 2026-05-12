@@ -123,8 +123,7 @@ static const nv_reg_t nv_init[] = {
 
     /* Page 0: Display control */
     {0xFF,0x30},{0xFF,0x52},{0xFF,0x00},
-    {0x3A,0x60},  /* COLMOD: 0x60 = 18-bit pixel (dpi=110) — datasheet default is 0x70=24-bit; manufacturer omits, force in case */
-    {0x36,0x00},  /* MADCTL: 0x00 (was 0x0A) */
+    {0x36,0x0A},  /* MADCTL — manufacturer spec (bgr=1, ss=1) */
 };
 
 /* -------------------------------------------------------------------------

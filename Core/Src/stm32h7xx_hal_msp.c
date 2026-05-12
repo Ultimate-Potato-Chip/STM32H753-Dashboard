@@ -414,7 +414,7 @@ void HAL_LTDC_MspInit(LTDC_HandleTypeDef* hltdc)
     PeriphClkInitStruct.PLL3.PLL3N = 24;   /* VCO = 8*24 = 192 MHz (VCOWIDE min)   */
     PeriphClkInitStruct.PLL3.PLL3P = 2;
     PeriphClkInitStruct.PLL3.PLL3Q = 2;
-    PeriphClkInitStruct.PLL3.PLL3R = 5;    /* LTDC_CLK = 192/5 = 38.4 MHz (~60 fps; was 48 MHz — slowed for jumper-wire signal integrity) */
+    PeriphClkInitStruct.PLL3.PLL3R = 4;    /* LTDC_CLK = 192/4 = 48 MHz per manufacturer init spec */
     PeriphClkInitStruct.PLL3.PLL3RGE = RCC_PLL3VCIRANGE_3;
     PeriphClkInitStruct.PLL3.PLL3VCOSEL = RCC_PLL3VCOWIDE;
     PeriphClkInitStruct.PLL3.PLL3FRACN = 0.0;

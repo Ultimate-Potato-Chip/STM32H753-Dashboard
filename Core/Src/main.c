@@ -463,7 +463,7 @@ static void MX_LTDC_Init(void)
   hltdc.Init.AccumulatedVBP = 20;    /* VBP=16 per manufacturer init code */
   hltdc.Init.AccumulatedActiveW = 765;
   hltdc.Init.AccumulatedActiveH = 740;
-  hltdc.Init.TotalWidth = 885;       /* HFP=120 (datasheet typ) — manufacturer used 46; bumped because late pixels in line buffer not latching before commit */
+  hltdc.Init.TotalWidth = 811;       /* HFP=46 per manufacturer init code */
   hltdc.Init.TotalHeigh = 790;       /* VFP=50 per manufacturer init code */
   hltdc.Init.Backcolor.Blue = 0;
   hltdc.Init.Backcolor.Green = 0;

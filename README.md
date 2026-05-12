@@ -7,7 +7,7 @@ STM32H753ZI-based digital instrument cluster for a Ford F-100. Replaces the anal
 - **MCU:** STM32H753ZI on Nucleo-144 dev board
 - **Displays:**
   - 4× ST77916 round 360×360 LCDs (peripheral gauges: fuel, oil pressure, coolant temp, charge voltage) — driven via shared QSPI, individual CS lines
-  - 1× NV3052CGRB-based 4" 720×720 square LCD (center display: speedometer, tachometer, high-beam) — 18-bit RGB666 panel driven from LTDC (RGB565 framebuffer → 24-bit LTDC bus, panel reads top 6 bits of each channel) + 3-wire SPI for init
+  - 1× NV3052CGRB-based 4" 720×720 round LCD (center display: speedometer, tachometer, high-beam) — 18-bit RGB666 panel driven from LTDC (RGB565 framebuffer → 24-bit LTDC bus, panel reads top 6 bits of each channel) + 3-wire SPI for init. The pixel matrix is 720×720; the visible aperture is circular so the corners are not rendered.
 - **Inputs:**
   - Holley Sniper 2 EFI over CAN (FDCAN1, 1 Mbps)
   - ADC: oil pressure, coolant temp, battery voltage, fuel level, headlight dimmer rheostat
