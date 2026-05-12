@@ -6,18 +6,36 @@ Living document. Captures design decisions made during development so they don't
 
 ## Grounding philosophy (applies to all sensors)
 
-**Star ground at the harness, unified ground plane on the PCB.**
+**DECISION PENDING** — two viable topologies. Decide before PCB layout / connector selection.
 
-Each sensor on the harness gets a dedicated signal-ground terminal pin (e.g., `FUEL_GND`, `OIL_GND`, `COOLANT_GND`, etc.). The customer runs a small-gauge wire from that terminal alongside the sensor signal wire all the way to the sender's body or its dedicated ground stud. Inside the dashboard, every sensor's ground terminal ties to the same **single signal-ground plane** on the PCB — that's the "star point."
+### Option A: Shared low-reference terminal (likely choice — fewer pins, simpler install)
 
-Why this matters:
-- A dedicated ground per sensor means voltage drop on one ground wire (loose connection, corrosion, long run) affects only that sensor — no cross-coupling between fuel, oil, coolant readings.
-- High-current paths (alternator, lights, fans) don't flow through any sensor ground wire, so they can't induce voltage noise into ADC readings.
-- The PCB signal ground bonds to chassis/battery ground at exactly **one** carefully chosen point — typically right at the dashboard's power input terminal block. No ground loops between the dashboard and the rest of the car's electrical system.
+Single `SENSOR_GND` terminal on the harness that customers connect once. All resistive sender grounds (fuel, oil, coolant) tie into this one terminal via a junction in the harness or back at the dashboard. Inside the dashboard, that single terminal lands on the PCB's signal-ground plane.
 
-Install instruction (manual): customers should bond the dashboard's main GND terminal to the **engine block ground stud** (where the battery negative cable terminates), not random sheet metal. This puts the dashboard at the same potential as the alternator and battery, which is the cleanest reference in the car.
+- Pin count: ~5 pins for 4 sensors (4 SIG + 1 GND)
+- Failure mode: if SENSOR_GND develops a bad connection, all sensors affected at once — easy to diagnose
+- Matches Autometer Invision and many factory cluster topologies
+- Lower BOM cost (smaller connector)
 
-The 12V switched excitation rail for resistive senders (fuel, oil pressure, coolant temp) can be shared across sensors — one fused 12V_SW rail on the PCB, individually pulled-up to each sensor's signal pin via that sensor's own R_known resistor. Each input also gets its own TVS/Schottky clamp and analog low-pass filter so a fault on one sensor wire can't affect any other.
+### Option B: Per-sensor dedicated grounds (more pins, better fault isolation)
+
+Each sensor on the harness gets its own ground terminal pin (`FUEL_GND`, `OIL_GND`, `COOLANT_GND`). Inside the dashboard, all of them still converge on the same single signal-ground plane on the PCB — the "star point" is on the PCB, not at the customer end.
+
+- Pin count: ~8 pins for 4 sensors (4 SIG + 4 GND)
+- Failure mode: a bad ground wire affects only one sensor — others remain accurate
+- Matches AEM CD-5 / CD-7 topology
+- Better noise isolation but the practical difference is small (~2 mV at our currents)
+
+### Shared elements regardless of topology
+
+- All grounds converge on **one unified signal-ground plane** inside the dashboard. PCB layout uses a single contiguous copper pour; no splits under analog signal traces.
+- The PCB signal ground bonds to chassis/battery ground at exactly **one** carefully chosen point — typically right at the dashboard's main power input terminal block. No secondary bonds.
+- The 12V switched excitation rail for resistive senders is shared across sensors — one fused 12V_SW on the PCB, individually pulled up to each sensor signal pin via that sensor's own R_known. Each input has its own TVS clamp and analog low-pass filter, so a fault on one sensor wire can't propagate to another.
+- **Dimmer input** does NOT need a dedicated ground — we're measuring the voltage on the existing instrument-panel illumination wire (already in the harness running from the headlight switch's rheostat to the panel bulbs). That signal is referenced to chassis via the bulbs' mounts; we read it relative to our dashboard GND.
+
+### Customer install instruction (manual, both options)
+
+Bond the dashboard's main GND terminal to the **engine block ground stud** (where the battery negative cable terminates), not random sheet metal. This puts the dashboard at the same potential as the alternator and battery, which is the cleanest reference in the car.
 
 ---
 
