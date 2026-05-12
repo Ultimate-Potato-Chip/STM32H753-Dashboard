@@ -4,22 +4,42 @@ extern I2C_HandleTypeDef  hi2c1;
 extern UART_HandleTypeDef huart1;
 
 static const CalibrationData defaults = {
-    .vssPulsesPerMile     = 8000,
-    .oilSenderMinV        = 0.5f,
-    .oilSenderMaxV        = 4.5f,
-    .oilSenderMaxPSI      = 100.0f,
-    .fuelSenderEmptyOhm   = 10,
-    .fuelSenderFullOhm    = 73,
-    .fuelDividerOhm       = 330,
-    .tachPulsesPerRev     = 1,
+    .vssPulsesPerMile        = 8000,
+
+    /* Oil pressure: GM 0-90Ω resistive sender, 100 PSI range */
+    .oilSenderType           = OIL_SENDER_RESISTIVE,
+    .oilSenderZeroOhm        = 0,
+    .oilSenderMaxOhm         = 90,
+    .oilSenderMaxPSI         = 100,
+    .oilDividerOhm           = 1000,
+    .oilSwitchThresholdMV    = 1650,    /* mid-rail */
+
+    /* Fuel: Ford-style 73Ω full / 10Ω empty, 330Ω divider */
+    .fuelSenderEmptyOhm      = 10,
+    .fuelSenderFullOhm       = 73,
+    .fuelDividerOhm          = 330,
+
+    /* Coolant: GM thermistor preset */
+    .coolantProfile          = COOLANT_PROFILE_GM,
+    .coolantDividerOhm       = 2200,
+    .coolantCustomNumPoints  = 0,
+
+    /* Battery: 100k/33k divider gives ratio 4.03 (V_batt = V_adc * 4.03 worst case) */
+    .battDividerRatio        = 4.03f,
+
+    /* Dimmer */
+    .dimmerMinV              = 0.0f,
+    .dimmerMaxV              = 12.0f,
+
+    .tachPulsesPerRev        = 1,
 
     /* CAN preferred for everything by default — customers with a Sniper 2
      * get full functionality automatically, customers without CAN fall back
      * to local sensors transparently. App can override per-gauge. */
-    .speedSource          = SRC_CAN_PRIMARY,
-    .tachSource           = SRC_CAN_PRIMARY,
-    .coolantTempSource    = SRC_CAN_PRIMARY,
-    .batteryVoltageSource = SRC_CAN_PRIMARY,
+    .speedSource             = SRC_CAN_PRIMARY,
+    .tachSource              = SRC_CAN_PRIMARY,
+    .coolantTempSource       = SRC_CAN_PRIMARY,
+    .batteryVoltageSource    = SRC_CAN_PRIMARY,
 };
 
 CalibrationData calibration;

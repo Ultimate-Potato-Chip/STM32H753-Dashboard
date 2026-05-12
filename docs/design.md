@@ -249,6 +249,77 @@ Stored values: just two int16s per calibration slot (adc_empty, adc_full). Persi
 
 TODO — same pattern as VSS but reading from PA0 / TIM2 CH1. Calibration field: pulses per crankshaft revolution (typically 4 for an 8-cylinder spark output, 2 for a 4-cylinder, but varies by source — coil negative, distributor pickup, ECU tach output).
 
-## Other resistive senders (oil pressure, coolant temp)
+## Oil Pressure
 
-TODO — same voltage-divider pattern as fuel, but typically with published manufacturer curves (e.g., VDO oil pressure sender vs. resistance table). Plan: same dropdown approach (preset profile + custom multi-point cal), reusing the calibration UI pattern.
+### v1 scope: single OIL terminal, two sender types
+
+Customer's `OIL` terminal accepts either of the two common factory configurations on classic vehicles. Voltage transducers (0.5–4.5V active sensors) are deferred to v2 as a separate hardware input pin — those customers typically have aftermarket ECUs with CAN and can read oil pressure from CAN instead.
+
+| Type | Wiring | Reading |
+|---|---|---|
+| `OIL_SENDER_SWITCH` | 1-wire pressure switch, body grounds via engine block. Switch closes to ground when oil pressure drops below ~5 PSI. | Binary state only. Drives "low oil pressure" warning indicator. No PSI gauge value. |
+| `OIL_SENDER_RESISTIVE` | 1- or 2-wire variable resistance sender (GM 0–90Ω, Ford 0–73Ω, etc.). Body grounds via engine block on 1-wire, dedicated wire on 2-wire. | Voltage divider + ADC → resistance → linear map to PSI. |
+
+Same voltage-divider topology as fuel for the resistive case. The switch case re-uses the same ADC pin and pull-up — the switch grounds the line when closed, leaves it pulled high when open.
+
+### Calibration UI
+
+```
+Oil sender type: [ Pressure switch | Resistive sender ]
+
+  if Resistive sender:
+    Ohms at 0 PSI:    [    ]  (default 0)
+    Ohms at max PSI:  [    ]  (default 90)
+    Max PSI:          [    ]  (default 100)
+```
+
+Worth providing presets here too (GM, Ford, AutoMeter common ranges) as a dropdown above the manual values to skip the lookup for most customers.
+
+---
+
+## Coolant Temp
+
+### v1 scope: thermistor with preset library + custom curve
+
+All factory classic-car coolant senders are NTC thermistors — resistance decreases as temperature rises, **non-linearly**. Two-point linear calibration would be noticeably wrong at intermediate temperatures, so we need a curve.
+
+### Calibration approach
+
+Three modes selectable in the app:
+
+1. **Preset profile** (default for most customers): pick from a built-in curve library (currently GM and Ford; more to be added). Each preset is a 5-point R/T table that the firmware interpolates between.
+2. **Custom curve**: user enters 2–5 R/T pairs via the app. For owners of non-standard senders, racing applications, etc.
+3. **Reverse-engineered preset** (added by us, not the customer): see workflow below.
+
+### How we add new presets to the library
+
+Procedure for characterizing an unknown sender to add it as a built-in preset:
+
+1. **Get a reference sender with a documented manufacturer curve** (e.g., a fresh GM AC Delco sender with its published R/T table).
+2. **Set up a water bath** — pot of water on a hot plate with a precision thermocouple meter.
+3. **Submerge both the reference sender and the unknown sender** at the same depth, ensuring good thermal contact between them.
+4. **Heat the bath through the operating range** (e.g., room temp → 32°F (with ice) → 100°F → 160°F → 212°F (boiling)), pausing at each checkpoint for thermal equilibration.
+5. **At each checkpoint**, read:
+   - Water temperature (thermocouple)
+   - Reference sender resistance (ohmmeter) — sanity-check against published curve
+   - Unknown sender resistance (ohmmeter)
+6. **Tabulate the unknown sender's R/T pairs** into a `CoolantPresetCurve` struct and add to `sensors.c`.
+7. **Ship the new preset** as an option in the next firmware release.
+
+This is exactly how aftermarket gauge manufacturers (Auto Meter, VDO) characterize the senders they include in their app dropdowns.
+
+### Implementation notes
+
+- 2200Ω divider pull-up handles the full thermistor range (low hundreds of Ω hot, tens of kΩ cold) without saturating either rail.
+- Linear interpolation between adjacent table points. Good enough for ±1–2°F accuracy at intermediate temps if cal points are spaced reasonably (every 50–80°F).
+- Off-curve readings (e.g., sensor disconnected → infinite R → register reads near rail voltage) are clamped to "below coldest point" or "above hottest point" rather than reported as wild garbage values.
+
+---
+
+## Battery Voltage / Dimmer
+
+Both read via a resistor divider (100k / 33k for a ~4:1 ratio, scales 0–15V battery rail down to 0–3.3V ADC range). Same divider topology for both; just different ADC channels.
+
+Battery voltage is straightforward — multiply ADC voltage by the divider ratio for the rail voltage. Generates a `lowBattery` warning if engine is running and voltage drops below 12.5V.
+
+Dimmer is the voltage on the factory panel illumination wire (output of the headlight switch rheostat). Customer-specific calibration captures their dimmer's voltage range during install — they sweep the rheostat to min and max while watching the captured value in the app, then save those bounds. Display brightness PWM maps linearly between those two voltage endpoints.
