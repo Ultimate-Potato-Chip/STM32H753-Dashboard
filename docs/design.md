@@ -82,6 +82,80 @@ Both VSS-pulse modes reduce to the same final formula — they just differ in wh
 
 ---
 
+## Fuel Level
+
+### Design goal
+Single labeled "FUEL" input on the harness. Accept any resistive fuel level sender (factory or aftermarket) without requiring the customer to know what their sender's resistance range is.
+
+### Sender source options (user-selectable in calibration UI)
+
+1. **Stock profile** — preset endpoints for common factory senders. User picks their vehicle's profile from a dropdown:
+   - GM (early): 0Ω full, 90Ω empty
+   - GM (modern): 40Ω full, 250Ω empty
+   - Ford: 73Ω full, 8-16Ω empty
+   - Mopar/Chrysler: 10Ω full, 73Ω empty
+   - Aftermarket American standard: 240Ω empty, 33Ω full
+2. **Two-point calibration** — user empties tank, taps "Set 0%", fills tank, taps "Set 100%". System stores both raw ADC values and interpolates. Handles any sender range AND direction (rising or falling Ω with fuel).
+3. **Multi-point calibration** *(future / v2)* — user adds intermediate points at ¼, ½, ¾ tank. Improves accuracy on senders with nonlinear float-arm geometry.
+
+### Hardware path
+
+Fuel sender (variable resistor to chassis ground) → voltage divider with known pull-up resistor → ADC pin (currently `PC5` on `ADC1`).
+
+```
+3.3V ── R_known ──┬── ADC pin (PC5)
+                  │
+              R_sender (fuel sender)
+                  │
+                 GND
+```
+
+`R_known` selection is a tradeoff: needs to be sized for the highest-resistance sender we want to support (so the divider doesn't pin at one end). For supporting both ~10Ω full-scale (Ford/Mopar) and ~250Ω full-scale (GM modern, aftermarket), `R_known ≈ 100Ω` gives reasonable ADC resolution across the full range. Note: at 250Ω/100Ω divider with 3.3V supply, the sender draws ~10mA — well within sender ratings.
+
+Additional input protection: small RC filter at the ADC pin (~100nF to ground + series resistor) to suppress sloshing transients before they hit the ADC.
+
+### Software path
+
+1. Read raw 12-bit ADC value periodically (every 100ms or so — fast enough, not wasting cycles).
+2. Apply low-pass filter with ~10–30 second time constant. (For an exponential moving average: `filtered = filtered + α × (raw - filtered)` where `α ≈ 0.001` at 100ms sample rate gives ~10s settling time.)
+3. Map filtered ADC value to 0–100% based on calibration mode:
+   - **Stock profile or two-point cal:**
+     ```
+     percent = (adc_filtered - adc_empty) × 100 / (adc_full - adc_empty)
+     clamp to [0, 100]
+     ```
+   - **Multi-point cal (future):** linear interpolation between adjacent calibration points.
+4. Optional: a second slower damping filter (~3–5 seconds) applied to the *output* percent before driving the gauge needle, so the visible needle motion is gentle even if the underlying value updates.
+
+### Calibration UI (Bluetooth phone app)
+
+```
+Sender source: [ Stock profile | Custom calibration ]
+
+  if Stock profile:
+    Profile: [ GM early | GM modern | Ford | Mopar | Aftermarket | … ]
+
+  if Custom calibration:
+    [ Set 0%  (tank empty) ]      ← captures current ADC reading
+    [ Set 100% (tank full) ]      ← captures current ADC reading
+    Current reading: 47%          ← live display so user can verify
+    [ Reset calibration ]
+```
+
+Stored values: just two int16s per calibration slot (adc_empty, adc_full). Persist to EEPROM along with the rest of the user config.
+
+### Implementation notes
+
+- Calibration captures the FILTERED ADC value, not the raw sample, so the captured endpoint isn't biased by a single noisy sample.
+- If `adc_full == adc_empty` (user error or uncalibrated), fall back to "—" on the gauge rather than dividing by zero.
+- Sloshing is severe enough during cornering that even with the filter you may see the gauge dip then recover. This is acceptable and matches factory gauge behavior. The damping filter on the output keeps the *visible* needle smooth.
+
+---
+
 ## Tachometer
 
 TODO — same pattern as VSS but reading from PA0 / TIM2 CH1. Calibration field: pulses per crankshaft revolution (typically 4 for an 8-cylinder spark output, 2 for a 4-cylinder, but varies by source — coil negative, distributor pickup, ECU tach output).
+
+## Other resistive senders (oil pressure, coolant temp)
+
+TODO — same voltage-divider pattern as fuel, but typically with published manufacturer curves (e.g., VDO oil pressure sender vs. resistance table). Plan: same dropdown approach (preset profile + custom multi-point cal), reusing the calibration UI pattern.
