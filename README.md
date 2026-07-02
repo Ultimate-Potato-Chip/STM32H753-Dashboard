@@ -1,6 +1,6 @@
 # Ford F-100 Digital Gauge Cluster
 
-STM32H753ZI-based digital instrument cluster for a Ford F-100. Replaces the analog gauge cluster with five displays (four round peripheral gauges plus a square center display) driven from CAN/ADC/pulse inputs.
+STM32H753ZI-based digital instrument cluster for a Ford F-100. Replaces the analog gauge cluster with five round displays (four peripheral gauges plus a larger center display) driven from CAN/ADC/pulse inputs.
 
 ## Hardware
 
